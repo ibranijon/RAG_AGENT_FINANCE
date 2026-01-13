@@ -10,6 +10,7 @@ C extensions
 
 #Dataset
 Dataset/
+.chroma/
 
 #Distribution / packaging
 .Python
