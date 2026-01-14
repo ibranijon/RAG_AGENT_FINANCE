@@ -1,9 +1,9 @@
 from typing import Any, Dict
-from graph.chains.retrieval_grader import retrieval_grader
+from graph.chains.retrieval_grader_chain import retrieval_grader
 from graph.state import GraphState
 
 
-def grade_documents(state: GraphState) -> Dict[str, Any]:
+def grade_documents_node(state: GraphState) -> Dict[str, Any]:
 
     print("---CHECK DOCUMENT RELEVANCE TO QUESTION---")
     question = state["question"]

@@ -1,5 +1,5 @@
 from ingestion_retrival import retriever
-from graph.chains.retrieval_grader import retrieval_grader, GradeDocuments
+from graph.chains.retrieval_grader_chain import retrieval_grader, GradeDocuments
 
 
 def test_retrival_grader_answer_yes() -> None:
