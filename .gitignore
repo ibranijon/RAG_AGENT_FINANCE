@@ -8,9 +8,12 @@ C extensions
 *.so
 
 
+
+
 #Dataset
 Dataset/
 .chroma/
+ingestion_manifest.json
 
 #Distribution / packaging
 .Python

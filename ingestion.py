@@ -9,15 +9,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_ollama import OllamaEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-load_dotenv()
 
+# -----------------------------
+# Configuration
+# -----------------------------
 
 @dataclass(frozen=True)
 class IngestionConfig:
@@ -25,25 +26,45 @@ class IngestionConfig:
     persist_directory: Path = Path("./.chroma")
     collection_name: str = "rag-chroma"
     embedding_model: str = "nomic-embed-text:latest"
-    chunk_size_tokens: int = 350
-    chunk_overlap_tokens: int = 60
+
+    # Chunking (approximate tokens; enforced by a hard char cap as well)
+    chunk_size_tokens: int = 1800
+    chunk_overlap_tokens: int = 100
+    max_chunk_chars: int = 2000
+
+    # Header/footer removal (repeated lines across pages)
     header_footer_window_lines: int = 3
     repeat_line_min_len: int = 8
     repeat_line_ratio: float = 0.6
+
     manifest_path: Path = Path("./ingestion_manifest.json")
 
+
+# -----------------------------
+# Utilities
+# -----------------------------
 
 def _sha1(text: str) -> str:
     return hashlib.sha1(text.encode("utf-8", errors="ignore")).hexdigest()
 
 
 def _normalize_text(text: str) -> str:
+    # Remove soft hyphen
     text = text.replace("\u00ad", "")
+
+    # De-hyphenate common PDF line breaks: "inter-\nnational" -> "international"
     text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
+
+    # Clean whitespace/newlines
     text = re.sub(r"[ \t]+\n", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r"[ \t]{2,}", " ", text)
     return text.strip()
+
+
+# -----------------------------
+# PDF Loading (PyMuPDF first, pdfplumber fallback)
+# -----------------------------
 
 def _load_pdf_pages_pdfplumber(pdf_path: Path) -> List[Document]:
     import pdfplumber
@@ -56,6 +77,24 @@ def _load_pdf_pages_pdfplumber(pdf_path: Path) -> List[Document]:
     return docs
 
 
+def _load_pdf_pages(pdf_path: Path) -> List[Document]:
+    # Try PyMuPDF first
+    try:
+        docs = PyMuPDFLoader(str(pdf_path)).load()
+    except Exception:
+        docs = []
+
+    # If extraction is weak/empty, fallback to pdfplumber
+    total_chars = sum(len((d.page_content or "").strip()) for d in docs) if docs else 0
+    if not docs or total_chars < 200:
+        docs = _load_pdf_pages_pdfplumber(pdf_path)
+
+    return docs
+
+
+# -----------------------------
+# Header/Footer Removal (Optional but recommended)
+# -----------------------------
 
 def _collect_repeated_lines(pages: List[str], cfg: IngestionConfig) -> set[str]:
     candidates: List[str] = []
@@ -74,9 +113,8 @@ def _collect_repeated_lines(pages: List[str], cfg: IngestionConfig) -> set[str]:
 
 
 def _strip_repeated_lines(page_text: str, repeated: set[str]) -> str:
-    lines = page_text.splitlines()
     out: List[str] = []
-    for ln in lines:
+    for ln in page_text.splitlines():
         s = ln.strip()
         if s and s in repeated:
             continue
@@ -84,35 +122,19 @@ def _strip_repeated_lines(page_text: str, repeated: set[str]) -> str:
     return "\n".join(out)
 
 
-def _load_pdf_pages(pdf_path: Path) -> List[Document]:
-    # Try PyMuPDF first
-    try:
-        loader = PyMuPDFLoader(str(pdf_path))
-        docs = loader.load()
-    except Exception:
-        docs = []
-
-    # If PyMuPDF extracted nothing useful, fallback to pdfplumber
-    if not docs or sum(len((d.page_content or "").strip()) for d in docs) < 200:
-        docs = _load_pdf_pages_pdfplumber(pdf_path)
-
-    return docs
-
-
+# -----------------------------
+# Cleaning + Metadata Enrichment
+# -----------------------------
 
 def _prepare_docs(pdf_path: Path, cfg: IngestionConfig) -> List[Document]:
+    # Load per-page documents (keeps page metadata for citations)
     pages = _load_pdf_pages(pdf_path)
-    if pages:
-        raw0 = pages[0].page_content or ""
-        print("RAW", pdf_path.name, "len:", len(raw0))
-
     raw_texts = [p.page_content or "" for p in pages]
 
-    ##CHANGESS -- repeated = _collect_repeated_lines(raw_texts, cfg) if len(raw_texts) >= 3 else set()
-    repeated = set()
-    #--------------------------------
+    # Remove repeating header/footer lines when we have enough pages to detect patterns
+    repeated = _collect_repeated_lines(raw_texts, cfg) if len(raw_texts) >= 3 else set()
 
-    cleaned_docs: List[Document] = []
+    cleaned: List[Document] = []
     for p in pages:
         text = p.page_content or ""
         if repeated:
@@ -122,23 +144,28 @@ def _prepare_docs(pdf_path: Path, cfg: IngestionConfig) -> List[Document]:
         meta = dict(p.metadata or {})
         meta["source"] = pdf_path.name
         meta["source_path"] = str(pdf_path.as_posix())
-        if "page" in meta:
+
+        # Ensure page is int when present
+        if meta.get("page") is not None:
             try:
                 meta["page"] = int(meta["page"])
             except Exception:
-                pass
+                meta["page"] = None
 
-        cleaned_docs.append(Document(page_content=text, metadata=meta))
+        cleaned.append(Document(page_content=text, metadata=meta))
 
-    return cleaned_docs
+    return cleaned
 
 
+# -----------------------------
+# Chunking + Stable IDs for Citations
+# -----------------------------
 
-def _enforce_max_chars(docs: List[Document], max_chars: int = 3500) -> List[Document]:
+def _enforce_max_chars(docs: List[Document], max_chars: int) -> List[Document]:
+    # Ollama embedding models have a context limit; enforce a hard cap.
     out: List[Document] = []
     for d in docs:
-        txt = d.page_content or ""
-        txt = txt.strip()
+        txt = (d.page_content or "").strip()
         if not txt:
             continue
 
@@ -153,10 +180,12 @@ def _enforce_max_chars(docs: List[Document], max_chars: int = 3500) -> List[Docu
             if chunk_txt:
                 out.append(Document(page_content=chunk_txt, metadata=dict(d.metadata)))
             start = end
+
     return out
 
 
 def _split_and_tag(docs: List[Document], cfg: IngestionConfig) -> Tuple[List[Document], List[str]]:
+    # Token-based split (approximation). We'll also enforce a hard char cap afterward.
     splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
         chunk_size=cfg.chunk_size_tokens,
         chunk_overlap=cfg.chunk_overlap_tokens,
@@ -164,10 +193,9 @@ def _split_and_tag(docs: List[Document], cfg: IngestionConfig) -> Tuple[List[Doc
     )
 
     splits = splitter.split_documents(docs)
-    splits = _enforce_max_chars(splits, max_chars=3500)
+    splits = _enforce_max_chars(splits, max_chars=cfg.max_chunk_chars)
 
-    print("Max chunk chars:", max((len(d.page_content) for d in splits), default=0))
-
+    # Stable chunk IDs per (source, page) for deterministic citations
     per_page_counter: Dict[Tuple[str, int], int] = defaultdict(int)
     ids: List[str] = []
 
@@ -191,74 +219,48 @@ def _split_and_tag(docs: List[Document], cfg: IngestionConfig) -> Tuple[List[Doc
         doc_id = _sha1(source_path)
         content_hash = _sha1(d.page_content)
 
+        # Citation metadata
         d.metadata["doc_id"] = doc_id
         d.metadata["chunk_id"] = chunk_id
         d.metadata["content_hash"] = content_hash
         d.metadata["page_start"] = page
         d.metadata["page_end"] = page
 
+        # Stable vectorstore id (lets you re-ingest deterministically)
         stable_id = f"{doc_id}::p{page_for_key}::c{chunk_id}"
         ids.append(stable_id)
 
     return splits, ids
 
 
+# -----------------------------
+# Main Ingestion Pipeline
+# -----------------------------
 
 def ingest(cfg: IngestionConfig = IngestionConfig()) -> dict:
     if not cfg.dataset_dir.exists():
         raise FileNotFoundError(f"Dataset folder not found: {cfg.dataset_dir.resolve()}")
 
-    pdf_files = sorted([p for p in cfg.dataset_dir.rglob("*.pdf") if p.is_file()])
+    pdf_files = sorted(p for p in cfg.dataset_dir.rglob("*.pdf") if p.is_file())
     if not pdf_files:
         raise FileNotFoundError(f"No PDF files found under: {cfg.dataset_dir.resolve()}")
 
     all_docs: List[Document] = []
     failures: List[dict] = []
 
+    # 1) Load + clean all PDFs as page-level Documents
     for pdf in pdf_files:
         try:
             docs = _prepare_docs(pdf, cfg)
-            if docs:
-                print(pdf.name, "first page chars:", len(docs[0].page_content or ""))
-            docs = [d for d in docs if d.page_content and len(d.page_content.strip()) > 5]
+            docs = [d for d in docs if (d.page_content or "").strip()]
             all_docs.extend(docs)
         except Exception as e:
             failures.append({"file": str(pdf), "error": repr(e)})
-        
 
-
-    #TESTINGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
-
-    print("PDF files found:", len(pdf_files))
-    print("Page docs after cleaning:", len(all_docs))
-
-    if all_docs:
-        print("Sample page length:", len(all_docs[0].page_content))
-        print("Sample page preview:", all_docs[0].page_content[:200])
-    else:
-        print("NO PAGES SURVIVED CLEANING")
-
-    #22222222222222222222222222222222222222222
-
-
+    # 2) Split into chunks + add stable IDs/metadata for citations
     splits, ids = _split_and_tag(all_docs, cfg)
 
-    embeddings = OllamaEmbeddings(model=cfg.embedding_model)
-
-    
-    vectorstore = Chroma.from_documents(
-        documents=splits,
-        ids=ids,
-        collection_name=cfg.collection_name,
-        embedding=embeddings,
-        persist_directory=str(cfg.persist_directory),
-    )
-
-    try:
-        vectorstore.persist()
-    except Exception:
-        pass
-
+    # If nothing was produced, write manifest and exit cleanly
     if not splits:
         manifest = {
             "ingested_at": datetime.utcnow().isoformat() + "Z",
@@ -268,6 +270,7 @@ def ingest(cfg: IngestionConfig = IngestionConfig()) -> dict:
             "embedding_model": cfg.embedding_model,
             "chunk_size_tokens": cfg.chunk_size_tokens,
             "chunk_overlap_tokens": cfg.chunk_overlap_tokens,
+            "max_chunk_chars": cfg.max_chunk_chars,
             "pdf_count": len(pdf_files),
             "page_docs_count": len(all_docs),
             "chunk_count": 0,
@@ -275,9 +278,41 @@ def ingest(cfg: IngestionConfig = IngestionConfig()) -> dict:
             "error": "No chunks created (PDF extraction returned empty text).",
         }
         cfg.manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        print(json.dumps(manifest, indent=2))
         return manifest
 
+    # 3) Embed + store in Chroma
+    embeddings = OllamaEmbeddings(model=cfg.embedding_model)
+    vectorstore = Chroma.from_documents(
+        documents=splits,
+        ids=ids,
+        collection_name=cfg.collection_name,
+        embedding=embeddings,
+        persist_directory=str(cfg.persist_directory),
+    )
+
+    # Persist (some versions auto-persist; this keeps it explicit)
+    try:
+        vectorstore.persist()
+    except Exception:
+        pass
+
+    manifest = {
+        "ingested_at": datetime.utcnow().isoformat() + "Z",
+        "dataset_dir": str(cfg.dataset_dir.resolve()),
+        "collection_name": cfg.collection_name,
+        "persist_directory": str(cfg.persist_directory.resolve()),
+        "embedding_model": cfg.embedding_model,
+        "chunk_size_tokens": cfg.chunk_size_tokens,
+        "chunk_overlap_tokens": cfg.chunk_overlap_tokens,
+        "max_chunk_chars": cfg.max_chunk_chars,
+        "pdf_count": len(pdf_files),
+        "page_docs_count": len(all_docs),
+        "chunk_count": len(splits),
+        "failures": failures,
+    }
+
+    cfg.manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    return manifest
 
 
 if __name__ == "__main__":

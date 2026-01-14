@@ -12,7 +12,7 @@ vs = Chroma(
     persist_directory=PERSIST_DIR,
 )
 
-query = "ai in finance"
+query = "AI impact on finance"
 docs = vs.similarity_search(query, k=5)
 
 print(f"Returned: {len(docs)} chunks\n")
