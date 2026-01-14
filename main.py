@@ -7,4 +7,5 @@ from graph.graph_flow import app
 if __name__ == "__main__":
 
     user_query = input("Enter a question about AI in Finance?\n")
-    print(app.invoke(input={"question": user_query}))
+    answer = app.invoke(input={"question": user_query})
+    print(answer['generation'])

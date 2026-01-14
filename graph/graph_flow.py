@@ -21,10 +21,11 @@ def response_checker(state: GraphState):
     question = state["question"]
     documents = state.get("documents", [])
     generation = state.get("generation", "")
+    answer_only = generation.split("\n\nSources:", 1)[0]
 
     print("Check grounding (hallucination)")
     grounded = hallucination_grader.invoke(
-        {"documents": documents, "generation": generation}
+        {"documents": documents, "generation": answer_only}
     ).binary_score
 
     if not grounded:
@@ -33,7 +34,7 @@ def response_checker(state: GraphState):
 
     print("Check if it answers the question")
     answers = answer_grader.invoke(
-        {"question": question, "generation": generation}
+        {"question": question, "generation": answer_only}
     ).binary_score
 
     if not answers:

@@ -9,14 +9,15 @@ from langchain_core.runnables import RunnableLambda, RunnableSequence
 
 llm = ChatOllama(model="llama3.1:latest", temperature=0)
 
-SYSTEM_PROMPT = """You are a careful assistant answering questions using ONLY the provided sources.
+SYSTEM_PROMPT = """You are a RAG assistant. Answer the user's question using ONLY the provided sources.
 Rules:
-- Use citations in the form [1], [2], etc. corresponding to the numbered sources in the context.
-- Every factual claim must be supported by at least one citation.
-- If the context does not contain enough evidence to answer, say: "I don't know based on the provided sources."
-- Do not invent sources, page numbers, or details not present in the context.
-- Prefer concise, direct answers.
-"""
+- Do NOT restate the question.
+- Do NOT write "According to [1]" / "Source [1] says" repeatedly.
+- Write a single coherent answer that synthesizes the sources.
+- Put citations like [1][2] at the end of the sentence they support.
+- If the sources are insufficient, output exactly: I don't know based on the provided sources.
+- Keep the answer concise (8 sentences maximum)."""
+
 
 
 def _fmt_page(md: Dict[str, Any]) -> str:
@@ -27,18 +28,15 @@ def _fmt_page(md: Dict[str, Any]) -> str:
 
 
 def _format_documents_for_prompt(docs: List[Document]) -> str:
-    lines: List[str] = []
+    parts: List[str] = []
     for i, d in enumerate(docs, 1):
-        md = d.metadata or {}
-        src = md.get("source", "unknown")
-        page = _fmt_page(md)
-        chunk_id = md.get("chunk_id", "?")
+        txt = (d.page_content or "").strip()
+        if not txt:
+            continue
+        parts.append(f"[{i}] {txt}")
+    return "\n\n".join(parts).strip()
 
-        lines.append(f"[{i}] source={src} page={page} chunk_id={chunk_id}")
-        lines.append(d.page_content.strip())
-        lines.append("")
 
-    return "\n".join(lines).strip()
 
 
 def _to_prompt_inputs(inputs: Dict[str, Any]) -> Dict[str, Any]:
