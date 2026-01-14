@@ -7,10 +7,10 @@ def grade_documents(state: GraphState) -> Dict[str, Any]:
 
     print("---CHECK DOCUMENT RELEVANCE TO QUESTION---")
     question = state["question"]
-    documents = state["documents"]
+    documents = state.get("documents", [])
 
     filtered_docs = []
-    ground_truth = True
+    
 
 
     for d in documents:
@@ -24,8 +24,4 @@ def grade_documents(state: GraphState) -> Dict[str, Any]:
 
 
 
-    if not filtered_docs:
-        ground_truth = False
-
-
-    return {"documents": filtered_docs, "question": question,"ground_truth":ground_truth }
+    return {"documents": filtered_docs, "question": question,"ground_truth":bool(filtered_docs)}
