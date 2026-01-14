@@ -1,108 +1,81 @@
 from dotenv import load_dotenv
 
-
 from graph.state import GraphState
 from langgraph.graph import StateGraph, END
-from graph.consts import WEBSEARCH,GENERATE,RETRIVE,GRADE_DOC
-from graph.nodes import generate_node,grade_document_node,retrive_node,web_search_node
-
-
-#from graph.chains.hallucinate_grade import hallucinate_grade
-#from graph.chains.answer_grade import answer_grade
-
-
-#Conditional Edge Functions
+from graph.consts import GENERATE,RETRIEVE,GRADE_DOCUMENTS, FALLBACK
+from graph.nodes import generate_node, grade_documents_node, retrieve_node, fallback_node
+from graph.chains.hallucination_grader_chain import hallucination_grader
+from graph.chains.answer_grader_chain import answer_grader
 
 load_dotenv()
 
-def router(state: GraphState):
-    question = state['question']
-    route = router_res.invoke({"question":question})
+#Conditional Edge Functions
+
+def relevancy_check(state: GraphState):
+    if state.get("document_relevancy", False):
+        return GENERATE
+    return FALLBACK   
 
 
-    print("First check between vectorstore and websearch")
-    if route.datasource == 'vectorstore':
-        print('GO TO VECTORSTORE')
-        return RETRIVE
-    
-    elif route.datasource == 'websearch':
-        print("GO TO WEBSEARCH")
-        return WEBSEARCH
+def response_checker(state: GraphState):
+    question = state["question"]
+    documents = state.get("documents", [])
+    generation = state.get("generation", "")
 
+    print("Check grounding (hallucination)")
+    grounded = hallucination_grader.invoke(
+        {"documents": documents, "generation": generation}
+    ).binary_score
 
-def decide_to_generate(state):
-
-    if state["web_search"]:
-        return WEBSEARCH
-    else:
+    if not grounded:
+        print("Not grounded -> generate back")
         return GENERATE
 
+    print("Check if it answers the question")
+    answers = answer_grader.invoke(
+        {"question": question, "generation": generation}
+    ).binary_score
 
-def reponse_checker(state: GraphState):
+    if not answers:
+        print("answer not based")
+        return FALLBACK
 
+    print("Grounded and answers -> end")
+    return END
 
-    question = state['question']
-    documents = state['documents']
-    generation = state['generation']
-
-    print("Check for hallucination")
-    score = hallucinate_grade.invoke({'documents': documents, 'generation': generation})
-
-
-
-    if hallucinate_result := score.binary_score:
-
-        print("Check Answer based or not")
-        score = answer_grade.invoke({'question':question,'generation':generation})
-
-        if answer_result := score.binary_score:
-
-            print("ITS BASED")
-            return END
-        else:
-            print("Its not based, back to searching")
-            return WEBSEARCH
-
-    else:
-        print("its hallucinating")
-        return GENERATE
-
-workflow = StateGraph(GraphState)
 
 #Nodes
-workflow.add_node(RETRIVE,retrive_node)
+workflow = StateGraph(GraphState)
 
-workflow.add_node(GRADE_DOC, grade_document_node)
+workflow.add_node(RETRIEVE,retrieve_node)
 
-workflow.add_node(WEBSEARCH, web_search_node)
+workflow.add_node(GRADE_DOCUMENTS, grade_documents_node)
 
 workflow.add_node(GENERATE, generate_node)
+
+workflow.add_node(FALLBACK, fallback_node)
 
 
 
 #Edges
-workflow.set_conditional_entry_point(router,{
-    RETRIVE : RETRIVE,
-    WEBSEARCH : WEBSEARCH
+
+workflow.set_entry_point(RETRIEVE)
+
+workflow.add_edge(RETRIEVE, GRADE_DOCUMENTS)
+
+workflow.add_conditional_edges(GRADE_DOCUMENTS, relevancy_check, {
+    FALLBACK : FALLBACK,
+    GENERATE : GENERATE
 })
 
-workflow.add_edge(RETRIVE, GRADE_DOC)
 
-workflow.add_conditional_edges(GRADE_DOC, decide_to_generate,
-                               {
-                                   WEBSEARCH : WEBSEARCH,
-                                   GENERATE : GENERATE
-                               })
-
-workflow.add_edge(WEBSEARCH, GENERATE)
-
-workflow.add_conditional_edges(GENERATE, reponse_checker, {
-    WEBSEARCH : WEBSEARCH,
+workflow.add_conditional_edges(GENERATE, response_checker, {
+    FALLBACK : FALLBACK,
     GENERATE : GENERATE,
     END : END
 })
 
-
+workflow.add_edge(FALLBACK, END)
 
 #App
 app = workflow.compile()

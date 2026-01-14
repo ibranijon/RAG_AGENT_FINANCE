@@ -16,5 +16,3 @@ def generate_node(state : GraphState) -> Dict[str,Any]:
     final_output = f"{answer}\n\n{sources}" if cited else answer
 
     return {"question": question, "documents": documents, "generation": final_output}
-
- 

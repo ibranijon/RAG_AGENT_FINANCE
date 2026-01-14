@@ -24,4 +24,4 @@ def grade_documents_node(state: GraphState) -> Dict[str, Any]:
 
 
 
-    return {"documents": filtered_docs, "question": question,"ground_truth":bool(filtered_docs)}
+    return {"documents": filtered_docs, "question": question,"document_relevancy":bool(filtered_docs)}

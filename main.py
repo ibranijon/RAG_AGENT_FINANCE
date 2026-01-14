@@ -1,6 +1,10 @@
-def main():
-    print("Hello from rag-agent-jon-ibrani!")
+from dotenv import load_dotenv
 
+load_dotenv()
+
+from graph.graph_flow import app
 
 if __name__ == "__main__":
-    main()
+
+    user_query = input("Enter a question about AI in Finance?\n")
+    print(app.invoke(input={"question": user_query}))
