@@ -19,13 +19,6 @@ Rules:
 - Keep the answer concise (8 sentences maximum)."""
 
 
-
-def _fmt_page(md: Dict[str, Any]) -> str:
-    p = md.get("page_start")
-    if p is None:
-        p = md.get("page")
-    return "?" if p is None else str(p)
-
 def _format_documents_for_prompt(docs: List[Document]) -> str:
     parts: List[str] = []
     for i, d in enumerate(docs, 1):
@@ -67,13 +60,18 @@ _CITATION_RE = re.compile(r"\[(\d+)\]")
 
 def extract_citation_numbers(text: str) -> List[int]:
     nums = [int(m.group(1)) for m in _CITATION_RE.finditer(text)]
+    # Deduplicate while preserving appearance
     seen: Set[int] = set()
     out: List[int] = []
     for n in nums:
         if n not in seen:
             seen.add(n)
             out.append(n)
+
+    # Sort numerically for the sources list
+    out.sort()
     return out
+
 
 def strip_invalid_citations(text: str, max_cite: int) -> str:
     def repl(m: re.Match) -> str:
@@ -82,7 +80,10 @@ def strip_invalid_citations(text: str, max_cite: int) -> str:
     return _CITATION_RE.sub(repl, text)
 
 def format_sources_block(docs: List[Document], cited_nums: List[int]) -> str:
-    lines = ["Sources:"]
+    if not cited_nums:
+        return ""
+
+    lines = ["### Sources"]
     for n in cited_nums:
         idx = n - 1
         if idx < 0 or idx >= len(docs):
@@ -101,6 +102,7 @@ def format_sources_block(docs: List[Document], cited_nums: List[int]) -> str:
         else:
             page_str = f"{p_start}-{p_end}"
 
-        lines.append(f"[{n}] {src}, page {page_str}")
+        lines.append(f"- **[{n}]** {src} (page {page_str})")
 
     return "\n".join(lines)
+
