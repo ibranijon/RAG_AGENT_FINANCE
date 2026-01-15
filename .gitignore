@@ -7,9 +7,6 @@ $py.class
 C extensions
 *.so
 
-
-
-
 #Dataset
 Dataset/
 .chroma/

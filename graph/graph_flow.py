@@ -23,25 +23,25 @@ def response_checker(state: GraphState):
     generation = state.get("generation", "")
     answer_only = generation.split("\n\nSources:", 1)[0]
 
-    print("Check grounding (hallucination)")
+    print("---HALLUCINATION: CHECK IF RESPONSE BASED ON CONTEXT---")
     grounded = hallucination_grader.invoke(
         {"documents": documents, "generation": answer_only}
     ).binary_score
 
     if not grounded:
-        print("Not grounded -> generate back")
+        print("---RESPONSE NOT BASED ON CONTEXT, BACK TO GENERATION---")
         return GENERATE
 
-    print("Check if it answers the question")
+    print("---GRADER: DOES RESPONSE ANSWER USER QUESTION---")
     answers = answer_grader.invoke(
         {"question": question, "generation": answer_only}
     ).binary_score
 
     if not answers:
-        print("answer not based")
+        print("---ANSWER DOES NOT SATISFY QUESTION---")
         return FALLBACK
 
-    print("Grounded and answers -> end")
+    print("---ANSWER IS SATISFACTORY---")
     return END
 
 

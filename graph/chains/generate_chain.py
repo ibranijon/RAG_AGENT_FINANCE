@@ -26,7 +26,6 @@ def _fmt_page(md: Dict[str, Any]) -> str:
         p = md.get("page")
     return "?" if p is None else str(p)
 
-
 def _format_documents_for_prompt(docs: List[Document]) -> str:
     parts: List[str] = []
     for i, d in enumerate(docs, 1):

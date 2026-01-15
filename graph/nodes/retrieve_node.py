@@ -5,7 +5,7 @@ from ingestion_retrival import retriever
 
 
 def retrieve_node(state: GraphState) -> Dict[str,Any]:
-    print("RETRIVE NODE")
+    print("---RETRIVE DATA FROM VECTORSTORE---")
 
     question = state["question"]
     documents = retriever.invoke(question)
