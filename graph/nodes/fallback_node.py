@@ -8,6 +8,6 @@ def fallback_node(state: GraphState) -> Dict[str, Any]:
 
     question = state["question"]
     documents = state.get("documents", [])
-    FALLBACK_MESSAGE = "I don't know based on the provided sources."
+    FALLBACK_MESSAGE = "I don't know the answer to that question. My dataset contain information about your question."
 
     return {"question": question, "documents": documents,"generation": FALLBACK_MESSAGE,}
