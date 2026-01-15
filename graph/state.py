@@ -6,5 +6,6 @@ class GraphState(TypedDict, total=False):
     generation : str
     document_relevancy : bool
     documents : List[Document]
+    retries: int
 
     

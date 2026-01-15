@@ -6,6 +6,8 @@ def generate_node(state : GraphState) -> Dict[str,Any]:
 
     question = state["question"]
     documents = state["documents"]
+    retries = state.get("retries", 0) + 1
+
 
     answer = generate.invoke({"question": question, "documents": documents})
 
@@ -15,4 +17,4 @@ def generate_node(state : GraphState) -> Dict[str,Any]:
     sources = format_sources_block(documents, cited)
     final_output = f"{answer}\n\n{sources}" if cited else answer
 
-    return {"question": question, "documents": documents, "generation": final_output}
+    return {"question": question, "documents": documents, "generation": final_output, 'retries': retries}

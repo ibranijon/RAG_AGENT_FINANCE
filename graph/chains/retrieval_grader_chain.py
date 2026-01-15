@@ -15,10 +15,14 @@ class GradeDocuments(BaseModel):
 
 structured_llm_grader = llm.with_structured_output(GradeDocuments)
 
-system = """You are a grader assessing relevance of a retrieved document to a user question. \n 
-    If the document contains keyword(s) or semantic meaning related to the question, grade it as relevant. \n
-    Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question."""
+system = """You are a strict grader assessing whether a retrieved document is relevant to a user question.
 
+Rules:
+- Answer 'yes' ONLY if the document contains direct evidence that it can help answer the question.
+- For named-entity questions (person, character, company name), answer 'yes' ONLY if the exact name appears in the document text.
+- If the connection is vague, indirect, or you are uncertain, answer 'no'.
+
+Return exactly 'yes' or 'no'."""
 grade_prompt = ChatPromptTemplate.from_messages(
     [
         ("system", system),

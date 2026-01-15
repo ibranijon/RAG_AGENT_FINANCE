@@ -7,6 +7,9 @@ from graph.nodes import generate_node, grade_documents_node, retrieve_node, fall
 from graph.chains.hallucination_grader_chain import hallucination_grader
 from graph.chains.answer_grader_chain import answer_grader
 
+
+MAX_RETRIES = 2 
+
 load_dotenv()
 
 #Conditional Edge Functions
@@ -18,10 +21,14 @@ def relevancy_check(state: GraphState):
 
 
 def response_checker(state: GraphState):
+    MAX_RETRIES = 2  # minimal safety cap to stop infinite loops
+
     question = state["question"]
     documents = state.get("documents", [])
     generation = state.get("generation", "")
     answer_only = generation.split("\n\nSources:", 1)[0]
+
+    retries = int(state.get("retries", 0))
 
     print("---HALLUCINATION: CHECK IF RESPONSE BASED ON CONTEXT---")
     grounded = hallucination_grader.invoke(
@@ -29,7 +36,11 @@ def response_checker(state: GraphState):
     ).binary_score
 
     if not grounded:
-        print("---RESPONSE NOT BASED ON CONTEXT, BACK TO GENERATION---")
+        print("---RESPONSE NOT BASED ON CONTEXT---")
+        if retries >= MAX_RETRIES:
+            print("---MAX RETRIES HIT, ROUTING TO FALLBACK---")
+            return FALLBACK
+        print("---BACK TO GENERATION---")
         return GENERATE
 
     print("---GRADER: DOES RESPONSE ANSWER USER QUESTION---")
@@ -43,6 +54,7 @@ def response_checker(state: GraphState):
 
     print("---ANSWER IS SATISFACTORY---")
     return END
+
 
 
 #Nodes
