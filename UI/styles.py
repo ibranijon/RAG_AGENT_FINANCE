@@ -1,158 +1,127 @@
 import streamlit as st
 
-def inject_global_css() -> None:
+
+def apply_global_styles() -> None:
     st.markdown(
         """
         <style>
-          :root {
-            --bg: #0b0f19;
-            --panel: #0f1629;
-            --panel-2: #0c1222;
-            --text: #e8eefc;
-            --muted: #a7b3d3;
-            --border: rgba(255,255,255,0.08);
-            --user: #1a2a52;
-            --assistant: #0f1629;
-            --accent: #7aa2ff;
-            --shadow: 0 10px 30px rgba(0,0,0,0.35);
-            --radius: 16px;
-          }
+        :root {
+            --bg: #FFF7ED;
+            --card: rgba(255,255,255,0.75);
+            --border: rgba(120, 53, 15, 0.18);
+            --text: #2B1B12;
+            --muted: rgba(43, 27, 18, 0.70);
+            --accent: #FB923C;
+            --accent2: #F97316;
+            --shadow: 0 10px 30px rgba(43, 27, 18, 0.10);
+            --radius: 18px;
+        }
 
-          html, body, [data-testid="stAppViewContainer"] {
-            background: radial-gradient(1200px 800px at 20% 0%, rgba(122,162,255,0.12), transparent 60%),
-                        radial-gradient(900px 700px at 80% 10%, rgba(120,255,214,0.08), transparent 55%),
-                        var(--bg) !important;
-            color: var(--text) !important;
-          }
+        .stApp {
+            background: radial-gradient(1200px 700px at 15% 0%, rgba(251, 146, 60, 0.18), transparent 55%),
+                        radial-gradient(1100px 700px at 85% 10%, rgba(249, 115, 22, 0.16), transparent 55%),
+                        linear-gradient(180deg, var(--bg), #FFFFFF);
+            color: var(--text);
+        }
 
-          [data-testid="stSidebar"] {
-            background: rgba(15, 22, 41, 0.72) !important;
-            border-right: 1px solid var(--border);
-            backdrop-filter: blur(10px);
-          }
+        [data-testid="stHeader"] {
+            background: transparent;
+        }
 
-          .app-shell {
-            max-width: 920px;
+        .app-shell {
+            max-width: 980px;
             margin: 0 auto;
-            padding: 18px 14px 30px 14px;
-          }
+        }
 
-          .topbar {
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            padding: 10px 8px;
-            margin-bottom: 14px;
-            background: linear-gradient(to bottom, rgba(11,15,25,0.85), rgba(11,15,25,0));
-            backdrop-filter: blur(10px);
-          }
-
-          .brand {
-            display: flex;
-            align-items: baseline;
-            gap: 10px;
-          }
-
-          .brand-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 999px;
-            background: var(--accent);
-            box-shadow: 0 0 18px rgba(122,162,255,0.55);
-            margin-top: 6px;
-          }
-
-          .brand-title {
-            font-size: 18px;
-            font-weight: 700;
-            letter-spacing: 0.2px;
-          }
-
-          .brand-subtitle {
-            font-size: 12px;
-            color: var(--muted);
-            margin-left: 8px;
-          }
-
-          .chat-wrap {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            padding-bottom: 8px;
-          }
-
-          .msg-row {
-            display: flex;
-            width: 100%;
-          }
-
-          .msg-row.user { justify-content: flex-end; }
-          .msg-row.assistant { justify-content: flex-start; }
-
-          .bubble {
-            max-width: 84%;
+        .topbar {
+            padding: 18px 18px 6px 18px;
             border: 1px solid var(--border);
+            background: var(--card);
             border-radius: var(--radius);
-            padding: 12px 14px;
             box-shadow: var(--shadow);
-            line-height: 1.55;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-          }
+        }
 
-          .bubble.user {
-            background: linear-gradient(180deg, rgba(122,162,255,0.16), rgba(122,162,255,0.06));
-          }
+        .topbar h1 {
+            font-size: 1.25rem;
+            margin: 0;
+            line-height: 1.2;
+        }
 
-          .bubble.assistant {
-            background: rgba(15, 22, 41, 0.74);
-          }
-
-          .meta {
-            font-size: 11px;
+        .topbar p {
+            margin: 6px 0 0 0;
             color: var(--muted);
-            margin: 6px 4px 0 6px;
-          }
+            font-size: 0.95rem;
+        }
 
-          .status-pill {
+        .badge {
             display: inline-flex;
-            gap: 8px;
             align-items: center;
-            padding: 8px 10px;
+            gap: 8px;
+            margin-top: 10px;
+            padding: 7px 10px;
             border-radius: 999px;
             border: 1px solid var(--border);
-            background: rgba(15,22,41,0.55);
+            background: rgba(255,255,255,0.65);
             color: var(--muted);
-            font-size: 12px;
-            margin: 6px 0 10px 0;
-          }
+            font-size: 0.85rem;
+        }
 
-          .status-dot {
-            width: 8px;
-            height: 8px;
+        .dot {
+            width: 9px;
+            height: 9px;
             border-radius: 999px;
-            background: var(--accent);
-            box-shadow: 0 0 14px rgba(122,162,255,0.55);
-          }
+            background: linear-gradient(180deg, var(--accent), var(--accent2));
+            box-shadow: 0 0 0 4px rgba(251, 146, 60, 0.20);
+        }
 
-          div[data-testid="stChatInput"] textarea {
-            background: rgba(15, 22, 41, 0.72) !important;
-            border: 1px solid var(--border) !important;
+        [data-testid="stChatInput"] {
+            padding-top: 8px !important;
+            padding-left: 0 !important;     /* removes the left grey gutter */
+            padding-right: 0 !important;
+            background: transparent !important;
+        }
+
+        /* Streamlit adds padding on inner wrappers too */
+        [data-testid="stChatInput"] > div {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+        [data-testid="stChatInput"] > div > div {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        /* Your textarea styling + force where text starts */
+        [data-testid="stChatInput"] textarea {
+            border-radius: 16px !important;
+            border: 1px solid rgba(120, 53, 15, 0.22) !important;
+            background: rgba(255,255,255,0.95) !important;
             color: var(--text) !important;
-          }
 
-          div[data-testid="stChatInput"] {
-            position: sticky;
-            bottom: 0;
-            padding-top: 12px;
-            background: linear-gradient(to top, rgba(11,15,25,0.92), rgba(11,15,25,0));
-            backdrop-filter: blur(10px);
-          }
+            padding-left: 16px !important;   /* aligns text to the start */
+            padding-right: 56px !important;  /* space for the send icon */
+            margin: 0 !important;
+        }
 
-          .tiny-hint {
-            font-size: 12px;
+        /* Optional: some Streamlit versions use baseweb wrapper background */
+        [data-testid="stChatInput"] [data-baseweb="textarea"] {
+            background: transparent !important;
+        }
+
+        /* ===== ADD THIS to align answers with the input start ===== */
+        [data-testid="stChatMessage"] {
+            border: 1px solid rgba(120, 53, 15, 0.10);
+            background: rgba(255,255,255,0.62);
+            box-shadow: 0 8px 22px rgba(43, 27, 18, 0.06);
+
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+        }
+        .disclaimer {
+            margin-top: 8px;
             color: var(--muted);
-          }
+            font-size: 0.85rem;
+        }
         </style>
         """,
         unsafe_allow_html=True,
